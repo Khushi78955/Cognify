@@ -30,6 +30,19 @@ def _is_actual_question(text: str) -> bool:
     t = text.strip()
     t_lower = t.lower()
 
+    # Hard reject: proof / show-that / verify questions have no definite answer
+    # and are completely unsuitable for JEE practice with numerical input.
+    proof_starts = (
+        "show that", "show:", "prove that", "prove:", "verify that", "verify:",
+        "demonstrate that", "hence prove", "hence show", "hence verify",
+        "using the above", "using the result",
+    )
+    if any(t_lower.startswith(p) for p in proof_starts):
+        return False
+    # Also reject mid-sentence proof wording (e.g. "Find x and hence show that")
+    if "hence show that" in t_lower or "hence prove that" in t_lower:
+        return False
+
     # Reject hashtag/social media strings (#jee #maths etc.)
     words = t_lower.split()
     if not words:
@@ -49,7 +62,7 @@ def _is_actual_question(text: str) -> bool:
     # Hard pass: starts with action verbs common in JEE problems
     action_starts = (
         "find ", "evaluate ", "evaluate:", "calculate ", "compute ",
-        "solve ", "prove ", "show ", "determine ", "if ", "let ",
+        "solve ", "determine ", "if ", "let ",
         "given ", "the value of", "for what", "how many", "how much",
         "which of the", "the integral", "integrate ", "differentiate ",
         "simplify ", "expand ", "factorise ", "factorize ",
@@ -180,6 +193,11 @@ def ingest_topic(topic: str, n: int = 10) -> list[dict]:
     # Phase 3: embed and upsert each candidate
     import json as _json
     for candidate, classification in zip(candidates, classifications):
+        # Skip proof/show-that questions flagged by Gemini
+        if classification.get("skip"):
+            print(f"[Ingestion] Skipping proof question: {candidate['text'][:80]}")
+            continue
+
         text = candidate["text"]
         text_hash = candidate["text_hash"]
 

@@ -167,38 +167,15 @@ Only the JSON — no explanation."""
 
 def batch_classify_questions(questions: list[str], topic: str) -> list[dict]:
     """
-    Classify a batch of questions in a single Gemini API call.
+    Classify a batch of questions via Gemini, chunked to avoid 504 timeouts.
 
-    Reduces N individual classify_question() calls to 1 call, staying within
-    free-tier rate limits (10 RPM for gemini-2.5-flash-lite).
-
-    Returns a list aligned with `questions` — one classification dict per question.
-    Falls back to per-question classify on parse failure.
+    Sends at most CHUNK_SIZE questions per API call to keep prompts small.
+    Falls back to default {subtopics:[topic], difficulty:3} on any failure.
     """
     if not questions:
         return []
 
-    numbered = "\n".join(
-        f"{i+1}. {q[:300]}" for i, q in enumerate(questions)
-    )
-
-    prompt = f"""You are a JEE Mathematics expert. Classify each question below.
-
-Topic context: {topic.replace("_", " ")}
-
-Questions:
-{numbered}
-
-For EACH question return a JSON object with these fields:
-- "question_type": "mcq" or "numerical"
-- "subtopics": array of snake_case subtopic keys (e.g. ["integration_by_parts"])
-- "difficulty": integer 1-5
-- "options": {{"A":"...","B":"...","C":"...","D":"..."}} or null
-- "correct_option": letter or null
-- "correct_answer": string or null
-
-Return ONLY a JSON array of {len(questions)} objects, one per question, in the same order.
-No explanation. Only valid JSON array."""
+    CHUNK_SIZE = 8  # keep prompts small — larger batches cause 504 timeouts
 
     default = {
         "question_type": "numerical",
@@ -209,49 +186,68 @@ No explanation. Only valid JSON array."""
         "correct_answer": None,
     }
 
-    try:
-        raw = _call_with_retry(prompt, max_retries=3)
-        # Strip code fences if present
-        if "```" in raw:
-            parts = raw.split("```")
-            raw = parts[1].strip()
-            if raw.lower().startswith("json"):
-                raw = raw[4:].strip()
-        start = raw.find("[")
-        end = raw.rfind("]") + 1
-        if start != -1 and end > start:
-            raw = raw[start:end]
-        results = json.loads(_fix_json_escapes(raw))
-        if not isinstance(results, list):
-            raise ValueError("Expected JSON array")
+    def _classify_chunk(chunk: list[str]) -> list[dict]:
+        numbered = "\n".join(f"{i+1}. {q[:280]}" for i, q in enumerate(chunk))
+        prompt = f"""You are a JEE Mathematics expert. Classify each question below.
 
-        # Normalise and pad/trim to match input length
-        out = []
-        for i, r in enumerate(results[:len(questions)]):
-            if not isinstance(r, dict):
-                out.append({**default, "subtopics": [topic]})
-                continue
-            r.setdefault("question_type", "numerical")
-            subtopics = r.get("subtopics") or [topic]
-            if subtopics == ["unknown"] or not subtopics:
-                subtopics = [topic]
-            r["subtopics"] = subtopics
-            r.setdefault("difficulty", 3)
-            r.setdefault("options", None)
-            r.setdefault("correct_option", None)
-            r.setdefault("correct_answer", None)
-            out.append(r)
+Topic context: {topic.replace("_", " ")}
 
-        # If Gemini returned fewer items than questions, pad with defaults
-        while len(out) < len(questions):
-            out.append({**default, "subtopics": [topic]})
+Questions:
+{numbered}
 
-        return out
+Return ONLY a JSON array of {len(chunk)} objects, one per question, in order.
+Each object must have: "question_type" ("mcq"/"numerical"), "subtopics" (array),
+"difficulty" (1-5), "options" (object or null), "correct_option" (letter or null),
+"correct_answer" (string or null).
 
-    except Exception as e:
-        print(f"[Gemini] batch_classify_questions error: {e}")
-        # Graceful degradation: return defaults (subtopics = topic) for all
-        return [{**default, "subtopics": [topic]} for _ in questions]
+IMPORTANT: If a question says "show that", "prove that", "verify that", "demonstrate that",
+or asks for a proof/derivation (no unique numerical or MCQ answer exists), set "skip": true
+in that object instead. These are NOT valid JEE practice questions.
+No explanation. Only valid JSON array."""
+
+        try:
+            # Only 1 retry for classify — avoid wasting 7s on repeated 504s
+            raw = _call_with_retry(prompt, max_retries=2)
+            if "```" in raw:
+                parts = raw.split("```")
+                raw = parts[1].strip()
+                if raw.lower().startswith("json"):
+                    raw = raw[4:].strip()
+            start = raw.find("[")
+            end = raw.rfind("]") + 1
+            if start == -1 or end <= start:
+                return [{**default} for _ in chunk]
+            results = json.loads(_fix_json_escapes(raw[start:end]))
+            if not isinstance(results, list):
+                return [{**default} for _ in chunk]
+            out = []
+            for r in results[:len(chunk)]:
+                if not isinstance(r, dict):
+                    out.append({**default})
+                    continue
+                r.setdefault("question_type", "numerical")
+                subtopics = r.get("subtopics") or [topic]
+                if subtopics == ["unknown"] or not subtopics:
+                    subtopics = [topic]
+                r["subtopics"] = subtopics
+                r.setdefault("difficulty", 3)
+                r.setdefault("options", None)
+                r.setdefault("correct_option", None)
+                r.setdefault("correct_answer", None)
+                out.append(r)
+            while len(out) < len(chunk):
+                out.append({**default})
+            return out
+        except Exception as e:
+            print(f"[Gemini] batch_classify_questions error: {e}")
+            return [{**default} for _ in chunk]
+
+    # Process chunks and aggregate
+    all_results: list[dict] = []
+    for i in range(0, len(questions), CHUNK_SIZE):
+        chunk = questions[i : i + CHUNK_SIZE]
+        all_results.extend(_classify_chunk(chunk))
+    return all_results
 
 
 def generate_lesson(concept: str, learner_context: str = "") -> str:
