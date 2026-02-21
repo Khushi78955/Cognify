@@ -122,13 +122,18 @@ def ingest_topic(topic: str, n: int = 10) -> list[dict]:
             results = tavily.search(
                 query=query,
                 max_results=5,
-                include_raw_content=False,  # summary content is enough + faster
+                include_raw_content=True,  # get full page text for better question extraction
             )
             for result in results.get("results", []):
                 url = result.get("url", "")
-                # Use full content if available, fall back to snippet
-                content = result.get("content", "") or result.get("snippet", "")
+                # Prefer raw_content (full page text) → content (summary) → snippet
+                content = (
+                    result.get("raw_content") or
+                    result.get("content") or
+                    result.get("snippet", "")
+                )
                 extracted = _extract_questions_from_text(content, url)
+                print(f"[Ingestion] {url[:60]} → extracted {len(extracted)} candidates")
                 raw_questions.extend(extracted)
                 if len(raw_questions) >= n * 2:
                     break
@@ -190,6 +195,9 @@ def ingest_topic(topic: str, n: int = 10) -> list[dict]:
         subtopics = classification.get("subtopics") or [topic]
         if subtopics == ["unknown"] or not subtopics:
             subtopics = [topic]
+        # Always ensure the requesting topic is in subtopics for Pinecone filter match
+        if topic not in subtopics:
+            subtopics = [topic] + subtopics
 
         metadata = {
             "question_id": question_id,
@@ -238,6 +246,10 @@ def _extract_questions_from_text(content: str, source_url: str) -> list[dict]:
 
     def _clean(text: str) -> str:
         """Strip markdown/HTML artifacts from scraped text."""
+        # Remove heading markers (# ## ### etc.)
+        text = re.sub(r'^#{1,6}\s*', '', text.strip())
+        # Remove numbered list prefix at start: "3. " or "Q3. " etc.
+        text = re.sub(r'^\*{0,2}(?:Q(?:uestion)?\s*)?\d+[.)]\s+', '', text)
         # Remove bold markers (**text** or ***text***)
         text = re.sub(r'\*{2,3}(.*?)\*{2,3}', r'\1', text)
         # Remove leftover asterisks / answer blanks like :** or :__
@@ -286,6 +298,21 @@ def _extract_questions_from_text(content: str, source_url: str) -> list[dict]:
     questions: list[dict] = []
     seen: set[str] = set()
 
+    # Pre-process: if content is a wall of text (few newlines), split by question markers
+    # so that "**Question 2:** If four numbers..." becomes its own line
+    if content.count('\n') < 5 and len(content) > 200:
+        # Split on patterns like: **Question 3:** | Q.1 | 1. | 2. (numbered items)
+        content = re.sub(
+            r'(?<=[.!?])\s+(?='  # after sentence end, before...
+            r'(?:\*{0,2}(?:Q(?:uestion)?\s*\.?\s*\d+[.:)]|\d+[.)])))',
+            r'\n\n',
+            content
+        )
+        # Also split on **bold** question starters mid-sentence
+        content = re.sub(r'\*{1,2}(Q(?:uestion)?\s*\d+[.:])', r'\n\n\1', content)
+        # Split on numeric list patterns embedded in text: " 3. If..."
+        content = re.sub(r'(?<=\s)(\d{1,2}[.)]) (?=[A-Z])', r'\n\n\1 ', content)
+
     # Split into paragraphs (2+ newlines = paragraph break)
     paragraphs = re.split(r'\n{2,}', content)
 
@@ -301,7 +328,7 @@ def _extract_questions_from_text(content: str, source_url: str) -> list[dict]:
             # Skip obvious junk
             if any(j in lower for j in JUNK_PHRASES):
                 continue
-            if len(line) < 30 or len(line) > 700:
+            if len(line) < 30 or len(line) > 1200:
                 continue
             # Reject hashtag/social media lines
             words = line.split()

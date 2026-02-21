@@ -28,8 +28,19 @@ _cached_model_name: str | None = None
 
 
 def _fix_json_escapes(s: str) -> str:
-    """Fix unescaped backslashes from LaTeX in Gemini JSON output before json.loads."""
-    return re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', s)
+    r"""Fix unescaped backslashes from LaTeX in Gemini JSON output before json.loads.
+
+    Handles two cases:
+    - Correctly escaped pair \\X (keep as-is) e.g. \\dfrac stays \\dfrac
+    - Lone backslash before non-JSON-special char (double it) e.g. \dfrac -> \\dfrac
+    """
+    # Alt 1: valid JSON escape sequences — keep unchanged
+    # Alt 2: lone backslash + any char — double the backslash
+    return re.sub(
+        r'\\(\\|["\\/bfnrtu]|u[0-9a-fA-F]{4})|(\\)(.)',
+        lambda m: m.group(0) if m.group(1) is not None else '\\\\' + m.group(3),
+        s
+    )
 
 
 def _get_model():
@@ -463,6 +474,10 @@ Rules:
         if start == -1 or end == 0:
             return []
         return json.loads(_fix_json_escapes(raw[start:end]))[:n]
+    except json.JSONDecodeError as e:
+        print(f"[Gemini] generate_questions_for_topic JSON error: {e}")
+        print(f"[Gemini] raw (first 300): {raw[:300]!r}")
+        return []
     except Exception as e:
         print(f"[Gemini] generate_questions_for_topic error: {e}")
         return []
