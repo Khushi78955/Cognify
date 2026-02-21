@@ -112,11 +112,14 @@ def classify_question(question_text: str) -> dict:
 Question: {question_text}
 
 Determine:
-1. Is it MCQ (multiple choice with 4 options) or numerical (integer/decimal answer)?
+1. Is it MCQ (multiple choice) or numerical (integer/decimal answer)?
+   If it is a proof, derivation, explanation, "show that", "prove that", "describe",
+   "explain", "justify", "define", "discuss", "verify", "write", "state", "derive",
+   "deduce", or ANY open-ended/subjective question — return {{"skip": true}} immediately.
 2. The relevant JEE subtopics in snake_case (e.g. integration_by_parts).
 3. Difficulty 1-5 (1=easy, 5=JEE Advanced).
 4. If MCQ: extract options A/B/C/D and the correct option letter.
-5. If numerical: solve and provide the correct numeric answer.
+5. If numerical: solve and provide the exact numeric answer.
 
 Return ONLY valid JSON:
 {{
@@ -128,6 +131,7 @@ Return ONLY valid JSON:
   "correct_answer": "42" or null
 }}
 
+If the question is subjective/proof/open-ended, return ONLY: {{"skip": true}}
 If MCQ and options are not present in the question text, generate plausible JEE-style options.
 Only the JSON — no explanation."""
 
@@ -200,12 +204,11 @@ Each object must have: "question_type" ("mcq"/"numerical"), "subtopics" (array),
 "difficulty" (1-5), "options" (object or null), "correct_option" (letter or null),
 "correct_answer" (string or null).
 
-IMPORTANT: If the question requires ANY of the following, set \"skip\": true:
-- Proof / derivation (\"show that\", \"prove that\", \"verify that\", \"derive\")
-- Written explanation (\"explain\", \"describe\", \"discuss\", \"define\", \"state\")
-- Subjective justification (\"why\", \"justify\", \"elaborate\", \"comment on\")
-- Any question with no unique numeric or MCQ answer
-Only valid JEE-style questions with a definite numerical value or 4-option MCQ should be classified.
+CRITICAL: If a question is subjective, open-ended, or requires a written response — including
+"show that", "prove that", "verify", "demonstrate", "explain", "describe", "discuss",
+"define", "justify", "derive", "deduce", "write", "state", "give reasons", "comment" —
+set ONLY {{"skip": true}} in that object. These have no definite numerical/MCQ answer
+and must NOT be stored.
 No explanation. Only valid JSON array."""
 
         try:

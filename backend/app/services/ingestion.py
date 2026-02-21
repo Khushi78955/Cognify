@@ -30,37 +30,29 @@ def _is_actual_question(text: str) -> bool:
     t = text.strip()
     t_lower = t.lower()
 
-    # Hard reject: any question that requires a written / subjective answer.
-    # These are completely unsuitable for JEE numerical/MCQ practice.
+    # Hard reject: ANY question requiring a written/open-ended/subjective response.
+    # Only numerical (integer/decimal answer) and MCQ are valid for JEE practice.
     subjective_starts = (
-        # proof / derivation
+        # Proof / derivation
         "show that", "show:", "prove that", "prove:", "verify that", "verify:",
         "demonstrate that", "hence prove", "hence show", "hence verify",
         "using the above", "using the result",
-        # explanation / description
-        "explain ", "explain:", "explain why", "explain how",
-        "describe ", "describe:", "describe the",
-        "discuss ", "discuss:", "discuss the",
-        "define ", "define:", "what do you understand",
-        "what is meant by", "write a note", "write short", "write briefly",
-        "state and prove", "state and derive", "state the",
-        "derive the formula", "derive an expression", "derive the expression",
-        "obtain an expression", "obtain the expression",
-        "justify ", "justify:",
-        "why is ", "why does", "why are ",
-        # long-answer / essay
-        "elaborate ", "elaborate:",
-        "illustrate ", "illustrate:",
-        "comment on",
+        # Explanation / description
+        "explain", "describe", "discuss", "write", "state",
+        "define", "justify", "derive ", "deduce",
+        "what do you understand", "what is meant by",
+        "write a note", "write short", "briefly explain",
+        "give an example", "list the", "enumerate",
+        "comment on", "outline",
     )
     if any(t_lower.startswith(p) for p in subjective_starts):
         return False
-    # Also reject mid-sentence proof/explanation wording
-    mid_subj = (
+    # Mid-sentence subjective wording
+    subjective_contains = (
         "hence show that", "hence prove that", "hence verify that",
-        "and hence show", "and hence prove",
+        "hence derive", "hence deduce",
     )
-    if any(p in t_lower for p in mid_subj):
+    if any(p in t_lower for p in subjective_contains):
         return False
 
     # Reject hashtag/social media strings (#jee #maths etc.)
@@ -213,20 +205,20 @@ def ingest_topic(topic: str, n: int = 10) -> list[dict]:
     # Phase 3: embed and upsert each candidate
     import json as _json
     for candidate, classification in zip(candidates, classifications):
-        # Skip subjective / proof / open-ended questions flagged by Gemini
+        # Skip any subjective/open-ended/proof question flagged by Gemini
         if classification.get("skip"):
             print(f"[Ingestion] Skipping subjective question: {candidate['text'][:80]}")
             continue
 
-        # Hard filter: numerical questions MUST have a concrete answer
+        # Final validity gate: only store questions that have an actual answer
         q_type = classification.get("question_type", "numerical")
-        correct_ans = classification.get("correct_answer") or ""
-        correct_opt = classification.get("correct_option") or ""
-        if q_type == "numerical" and not correct_ans.strip():
-            print(f"[Ingestion] Skipping unanswerable numerical: {candidate['text'][:80]}")
+        has_answer = bool(classification.get("correct_answer"))
+        has_options = bool(classification.get("correct_option"))
+        if q_type == "numerical" and not has_answer:
+            print(f"[Ingestion] Skipping — no numerical answer: {candidate['text'][:80]}")
             continue
-        if q_type == "mcq" and not correct_opt.strip():
-            print(f"[Ingestion] Skipping unanswerable MCQ: {candidate['text'][:80]}")
+        if q_type == "mcq" and not has_options:
+            print(f"[Ingestion] Skipping — no MCQ answer: {candidate['text'][:80]}")
             continue
 
         text = candidate["text"]
