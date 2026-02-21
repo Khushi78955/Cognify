@@ -30,17 +30,37 @@ def _is_actual_question(text: str) -> bool:
     t = text.strip()
     t_lower = t.lower()
 
-    # Hard reject: proof / show-that / verify questions have no definite answer
-    # and are completely unsuitable for JEE practice with numerical input.
-    proof_starts = (
+    # Hard reject: any question that requires a written / subjective answer.
+    # These are completely unsuitable for JEE numerical/MCQ practice.
+    subjective_starts = (
+        # proof / derivation
         "show that", "show:", "prove that", "prove:", "verify that", "verify:",
         "demonstrate that", "hence prove", "hence show", "hence verify",
         "using the above", "using the result",
+        # explanation / description
+        "explain ", "explain:", "explain why", "explain how",
+        "describe ", "describe:", "describe the",
+        "discuss ", "discuss:", "discuss the",
+        "define ", "define:", "what do you understand",
+        "what is meant by", "write a note", "write short", "write briefly",
+        "state and prove", "state and derive", "state the",
+        "derive the formula", "derive an expression", "derive the expression",
+        "obtain an expression", "obtain the expression",
+        "justify ", "justify:",
+        "why is ", "why does", "why are ",
+        # long-answer / essay
+        "elaborate ", "elaborate:",
+        "illustrate ", "illustrate:",
+        "comment on",
     )
-    if any(t_lower.startswith(p) for p in proof_starts):
+    if any(t_lower.startswith(p) for p in subjective_starts):
         return False
-    # Also reject mid-sentence proof wording (e.g. "Find x and hence show that")
-    if "hence show that" in t_lower or "hence prove that" in t_lower:
+    # Also reject mid-sentence proof/explanation wording
+    mid_subj = (
+        "hence show that", "hence prove that", "hence verify that",
+        "and hence show", "and hence prove",
+    )
+    if any(p in t_lower for p in mid_subj):
         return False
 
     # Reject hashtag/social media strings (#jee #maths etc.)
@@ -193,9 +213,20 @@ def ingest_topic(topic: str, n: int = 10) -> list[dict]:
     # Phase 3: embed and upsert each candidate
     import json as _json
     for candidate, classification in zip(candidates, classifications):
-        # Skip proof/show-that questions flagged by Gemini
+        # Skip subjective / proof / open-ended questions flagged by Gemini
         if classification.get("skip"):
-            print(f"[Ingestion] Skipping proof question: {candidate['text'][:80]}")
+            print(f"[Ingestion] Skipping subjective question: {candidate['text'][:80]}")
+            continue
+
+        # Hard filter: numerical questions MUST have a concrete answer
+        q_type = classification.get("question_type", "numerical")
+        correct_ans = classification.get("correct_answer") or ""
+        correct_opt = classification.get("correct_option") or ""
+        if q_type == "numerical" and not correct_ans.strip():
+            print(f"[Ingestion] Skipping unanswerable numerical: {candidate['text'][:80]}")
+            continue
+        if q_type == "mcq" and not correct_opt.strip():
+            print(f"[Ingestion] Skipping unanswerable MCQ: {candidate['text'][:80]}")
             continue
 
         text = candidate["text"]

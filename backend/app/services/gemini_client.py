@@ -200,9 +200,12 @@ Each object must have: "question_type" ("mcq"/"numerical"), "subtopics" (array),
 "difficulty" (1-5), "options" (object or null), "correct_option" (letter or null),
 "correct_answer" (string or null).
 
-IMPORTANT: If a question says "show that", "prove that", "verify that", "demonstrate that",
-or asks for a proof/derivation (no unique numerical or MCQ answer exists), set "skip": true
-in that object instead. These are NOT valid JEE practice questions.
+IMPORTANT: If the question requires ANY of the following, set \"skip\": true:
+- Proof / derivation (\"show that\", \"prove that\", \"verify that\", \"derive\")
+- Written explanation (\"explain\", \"describe\", \"discuss\", \"define\", \"state\")
+- Subjective justification (\"why\", \"justify\", \"elaborate\", \"comment on\")
+- Any question with no unique numeric or MCQ answer
+Only valid JEE-style questions with a definite numerical value or 4-option MCQ should be classified.
 No explanation. Only valid JSON array."""
 
         try:
