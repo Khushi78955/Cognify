@@ -22,7 +22,63 @@ from app.services.gemini_client import batch_classify_questions, get_embedding
 from app.services.pinecone_client import upsert_question
 
 
-def ingest_topic(topic: str, n: int = 10) -> list[dict]:
+def _is_actual_question(text: str) -> bool:
+    """
+    Return True only if the text looks like a real maths problem.
+    Rejects declarative sentences, descriptions, and explanatory statements.
+    """
+    t = text.strip()
+    t_lower = t.lower()
+
+    # Hard pass: ends with "?" → likely interrogative
+    if t.endswith("?"):
+        return True
+
+    # Hard pass: starts with action verbs common in JEE problems
+    action_starts = (
+        "find ", "evaluate ", "evaluate:", "calculate ", "compute ",
+        "solve ", "prove ", "show ", "determine ", "if ", "let ",
+        "given ", "the value of", "for what", "how many", "how much",
+        "which of the", "the integral", "integrate ", "differentiate ",
+        "simplify ", "expand ", "factorise ", "factorize ",
+    )
+    for s in action_starts:
+        if t_lower.startswith(s):
+            return True
+
+    # Hard pass: contains explicit question-number prefix (Q1., Q2., **Question)
+    import re as _re
+    if _re.match(r"^\*{0,2}(q(?:uestion)?\s*\d+[.:]|\d+[.)]\s)", t_lower):
+        return True
+
+    # Hard pass: contains math formula-like content AND a question word
+    has_math = any(c in t for c in ("∫", "∑", "∏", "√", "$", "^", "dx", "dy"))
+    question_words = ("find", "evaluate", "calculate", "compute", "value", "integral")
+    if has_math and any(w in t_lower for w in question_words):
+        return True
+
+    # Soft reject: looks like a plain declarative statement
+    # (ends with period and starts with "The", "When", "This", "A ", "An ", etc.)
+    declarative_starts = (
+        "the proof", "the concept", "the formula", "the rule", "the method",
+        "when applying", "when using", "this method", "this formula",
+        "in mathematics", "in calculus", "integration by parts is",
+        "integration is", "a function", "an integral", "the technique",
+        "the process", "note that", "recall that",
+    )
+    if any(t_lower.startswith(d) for d in declarative_starts):
+        return False
+
+    # Default: reject if it doesn't contain any math-problem indicators
+    problem_indicators = (
+        "find", "evaluate", "calculate", "compute", "solve", "prove",
+        "determine", "integral", "differentiate", "limit", "value of",
+        "show that", "if f(", "if g(", "let f", "let g",
+    )
+    return any(p in t_lower for p in problem_indicators)
+
+
+
     """
     Ingest up to `n` new questions for the given topic from the web.
 
@@ -70,6 +126,10 @@ def ingest_topic(topic: str, n: int = 10) -> list[dict]:
             "detailing various", "series of", "includes different types",
             "jee main and advanced exam", "practice questions for",
         )):
+            continue
+
+        # Reject plain declarative statements — must look like an actual problem
+        if not _is_actual_question(text):
             continue
 
         text_hash = hashlib.sha256(text.encode()).hexdigest()
