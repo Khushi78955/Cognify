@@ -30,6 +30,18 @@ def _is_actual_question(text: str) -> bool:
     t = text.strip()
     t_lower = t.lower()
 
+    # Reject hashtag/social media strings (#jee #maths etc.)
+    words = t_lower.split()
+    if not words:
+        return False
+    hashtag_ratio = sum(1 for w in words if w.startswith('#')) / len(words)
+    if hashtag_ratio > 0.4:
+        return False
+
+    # Reject very short strings that sneak through
+    if len(t) < 30:
+        return False
+
     # Hard pass: ends with "?" → likely interrogative
     if t.endswith("?"):
         return True
@@ -289,7 +301,11 @@ def _extract_questions_from_text(content: str, source_url: str) -> list[dict]:
             # Skip obvious junk
             if any(j in lower for j in JUNK_PHRASES):
                 continue
-            if len(line) < 25 or len(line) > 700:
+            if len(line) < 30 or len(line) > 700:
+                continue
+            # Reject hashtag/social media lines
+            words = line.split()
+            if words and sum(1 for w in words if w.startswith('#')) / len(words) > 0.4:
                 continue
 
             is_question = (

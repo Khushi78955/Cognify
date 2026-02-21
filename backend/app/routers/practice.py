@@ -95,9 +95,13 @@ _JUNK_PHRASES = (
 def _is_valid_question(text: str) -> bool:
     """Return True if text looks like a real JEE math question (not scraped article text)."""
     t = text.strip()
-    if not t or len(t) < 15:
+    if not t or len(t) < 30:
         return False
     t_lower = t.lower()
+    # Reject hashtag/social media strings
+    words = t_lower.split()
+    if words and sum(1 for w in words if w.startswith('#')) / len(words) > 0.4:
+        return False
     # Reject known article/document description patterns (very specific phrases only)
     if any(p in t_lower for p in _JUNK_PHRASES):
         return False

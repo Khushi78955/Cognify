@@ -199,9 +199,7 @@ No explanation. Only valid JSON array."""
     }
 
     try:
-        model = _get_model()
-        response = model.generate_content(prompt, request_options={"timeout": 30})
-        raw = response.text.strip()
+        raw = _call_with_retry(prompt, max_retries=3)
         # Strip code fences if present
         if "```" in raw:
             parts = raw.split("```")
