@@ -18,7 +18,7 @@ from bs4 import BeautifulSoup
 from tavily import TavilyClient
 
 from app.config import settings
-from app.services.gemini_client import classify_question, get_embedding
+from app.services.gemini_client import batch_classify_questions, get_embedding
 from app.services.pinecone_client import upsert_question
 
 
@@ -57,7 +57,8 @@ def ingest_topic(topic: str, n: int = 10) -> list[dict]:
 
     ingested = []
     seen_hashes = set()
-
+    # Phase 1: deduplicate and collect candidates (no Gemini calls yet)
+    candidates = []
     for q in raw_questions:
         text = q["text"].strip()
         if len(text) < 20:
@@ -75,9 +76,23 @@ def ingest_topic(topic: str, n: int = 10) -> list[dict]:
         if text_hash in seen_hashes:
             continue
         seen_hashes.add(text_hash)
+        candidates.append({"text": text, "text_hash": text_hash, "source_url": q.get("source_url", "")})
+        if len(candidates) >= n:
+            break
 
-        # Classify with Gemini (now returns question_type, options, correct_answer, etc.)
-        classification = classify_question(text)
+    if not candidates:
+        print(f"[Ingestion] No candidates found for topic: {topic}")
+        return []
+
+    # Phase 2: batch classify all candidates in ONE Gemini API call (avoids 10-RPM limit)
+    texts = [c["text"] for c in candidates]
+    classifications = batch_classify_questions(texts, topic)
+
+    # Phase 3: embed and upsert each candidate
+    import json as _json
+    for candidate, classification in zip(candidates, classifications):
+        text = candidate["text"]
+        text_hash = candidate["text_hash"]
 
         # Embed with Gemini
         embedding = get_embedding(text)
@@ -85,9 +100,12 @@ def ingest_topic(topic: str, n: int = 10) -> list[dict]:
         question_id = f"Q_{text_hash[:16]}"
 
         # Serialize options dict → JSON string for Pinecone (flat metadata required)
-        import json as _json
         options = classification.get("options")
         options_str = _json.dumps(options) if options else None
+
+        subtopics = classification.get("subtopics") or [topic]
+        if subtopics == ["unknown"] or not subtopics:
+            subtopics = [topic]
 
         metadata = {
             "question_id": question_id,
@@ -96,9 +114,9 @@ def ingest_topic(topic: str, n: int = 10) -> list[dict]:
             "options": options_str or "",       # empty string = no options (Pinecone needs strings)
             "correct_option": classification.get("correct_option") or "",
             "correct_answer": classification.get("correct_answer") or "",
-            "subtopics": classification.get("subtopics", [topic]),
+            "subtopics": subtopics,
             "difficulty": classification.get("difficulty", 3),
-            "source_url": q.get("source_url", ""),
+            "source_url": candidate.get("source_url", ""),
             "text_hash": text_hash,
         }
 
@@ -106,9 +124,6 @@ def ingest_topic(topic: str, n: int = 10) -> list[dict]:
         upsert_question(question_id, embedding, metadata)
 
         ingested.append(metadata)
-
-        if len(ingested) >= n:
-            break
 
     print(f"[Ingestion] Ingested {len(ingested)} questions for topic: {topic}")
     return ingested

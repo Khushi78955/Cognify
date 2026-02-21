@@ -13,6 +13,7 @@ Used for:
 """
 
 import json
+import re
 import time
 import base64
 
@@ -23,15 +24,22 @@ from app.config import settings
 # Lazy initialization
 _model = None
 _embed_model = "models/gemini-embedding-001"
+_cached_model_name: str | None = None
+
+
+def _fix_json_escapes(s: str) -> str:
+    """Fix unescaped backslashes from LaTeX in Gemini JSON output before json.loads."""
+    return re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', s)
 
 
 def _get_model():
-    global _model
-    if _model is None:
+    global _model, _cached_model_name
+    if _model is None or _cached_model_name != settings.gemini_model:
         if not settings.gemini_api_key:
             raise RuntimeError("GEMINI_API_KEY not set")
         genai.configure(api_key=settings.gemini_api_key)
         _model = genai.GenerativeModel(settings.gemini_model)
+        _cached_model_name = settings.gemini_model
         print(f"[Gemini] Using model: {settings.gemini_model}")
     return _model
 
@@ -125,7 +133,7 @@ Only the JSON — no explanation."""
         end = raw.rfind("}") + 1
         if start != -1 and end > start:
             raw = raw[start:end]
-        result = json.loads(raw)
+        result = json.loads(_fix_json_escapes(raw))
         # Normalise
         result.setdefault("question_type", "numerical")
         result.setdefault("subtopics", ["unknown"])
@@ -144,6 +152,97 @@ Only the JSON — no explanation."""
             "correct_option": None,
             "correct_answer": None,
         }
+
+
+def batch_classify_questions(questions: list[str], topic: str) -> list[dict]:
+    """
+    Classify a batch of questions in a single Gemini API call.
+
+    Reduces N individual classify_question() calls to 1 call, staying within
+    free-tier rate limits (10 RPM for gemini-2.5-flash-lite).
+
+    Returns a list aligned with `questions` — one classification dict per question.
+    Falls back to per-question classify on parse failure.
+    """
+    if not questions:
+        return []
+
+    numbered = "\n".join(
+        f"{i+1}. {q[:300]}" for i, q in enumerate(questions)
+    )
+
+    prompt = f"""You are a JEE Mathematics expert. Classify each question below.
+
+Topic context: {topic.replace("_", " ")}
+
+Questions:
+{numbered}
+
+For EACH question return a JSON object with these fields:
+- "question_type": "mcq" or "numerical"
+- "subtopics": array of snake_case subtopic keys (e.g. ["integration_by_parts"])
+- "difficulty": integer 1-5
+- "options": {{"A":"...","B":"...","C":"...","D":"..."}} or null
+- "correct_option": letter or null
+- "correct_answer": string or null
+
+Return ONLY a JSON array of {len(questions)} objects, one per question, in the same order.
+No explanation. Only valid JSON array."""
+
+    default = {
+        "question_type": "numerical",
+        "subtopics": [topic],
+        "difficulty": 3,
+        "options": None,
+        "correct_option": None,
+        "correct_answer": None,
+    }
+
+    try:
+        model = _get_model()
+        response = model.generate_content(prompt, request_options={"timeout": 30})
+        raw = response.text.strip()
+        # Strip code fences if present
+        if "```" in raw:
+            parts = raw.split("```")
+            raw = parts[1].strip()
+            if raw.lower().startswith("json"):
+                raw = raw[4:].strip()
+        start = raw.find("[")
+        end = raw.rfind("]") + 1
+        if start != -1 and end > start:
+            raw = raw[start:end]
+        results = json.loads(_fix_json_escapes(raw))
+        if not isinstance(results, list):
+            raise ValueError("Expected JSON array")
+
+        # Normalise and pad/trim to match input length
+        out = []
+        for i, r in enumerate(results[:len(questions)]):
+            if not isinstance(r, dict):
+                out.append({**default, "subtopics": [topic]})
+                continue
+            r.setdefault("question_type", "numerical")
+            subtopics = r.get("subtopics") or [topic]
+            if subtopics == ["unknown"] or not subtopics:
+                subtopics = [topic]
+            r["subtopics"] = subtopics
+            r.setdefault("difficulty", 3)
+            r.setdefault("options", None)
+            r.setdefault("correct_option", None)
+            r.setdefault("correct_answer", None)
+            out.append(r)
+
+        # If Gemini returned fewer items than questions, pad with defaults
+        while len(out) < len(questions):
+            out.append({**default, "subtopics": [topic]})
+
+        return out
+
+    except Exception as e:
+        print(f"[Gemini] batch_classify_questions error: {e}")
+        # Graceful degradation: return defaults (subtopics = topic) for all
+        return [{**default, "subtopics": [topic]} for _ in questions]
 
 
 def generate_lesson(concept: str, learner_context: str = "") -> str:
@@ -226,7 +325,7 @@ def solve_doubt_with_image(
         end = raw.rfind("}") + 1
         if start != -1 and end > start:
             raw = raw[start:end]
-        return json.loads(raw)
+        return json.loads(_fix_json_escapes(raw))
     except Exception as e:
         print(f"[Gemini] solve_doubt_with_image error: {e}")
         return {
@@ -277,7 +376,7 @@ Be precise. Each step must be clear and numbered."""
         end = raw.rfind("}") + 1
         if start != -1 and end > start:
             raw = raw[start:end]
-        return json.loads(raw)
+        return json.loads(_fix_json_escapes(raw))
     except Exception as e:
         print(f"[Gemini] solve_doubt error: {e}")
         return {
@@ -365,7 +464,7 @@ Rules:
         end = raw.rfind("]") + 1
         if start == -1 or end == 0:
             return []
-        return json.loads(raw[start:end])[:n]
+        return json.loads(_fix_json_escapes(raw[start:end]))[:n]
     except Exception as e:
         print(f"[Gemini] generate_questions_for_topic error: {e}")
         return []
