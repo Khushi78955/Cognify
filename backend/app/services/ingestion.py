@@ -78,7 +78,7 @@ def _is_actual_question(text: str) -> bool:
     return any(p in t_lower for p in problem_indicators)
 
 
-
+def ingest_topic(topic: str, n: int = 10) -> list[dict]:
     """
     Ingest up to `n` new questions for the given topic from the web.
 
