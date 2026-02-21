@@ -69,6 +69,16 @@ def _is_actual_question(text: str) -> bool:
     if any(t_lower.startswith(d) for d in declarative_starts):
         return False
 
+    # Reject context-dependent fragments — sub-questions that need prior setup
+    # e.g. "If now a ball is drawn..." — "now" signals continuation
+    fragment_patterns = (
+        "if now ", "then the probability", "then find", "then what",
+        "now find", "also find", "hence find", "hence determine",
+        "what is the probability that this", "the probability that this drawn",
+    )
+    if any(t_lower.startswith(p) or p in t_lower[:60] for p in fragment_patterns):
+        return False
+
     # Default: reject if it doesn't contain any math-problem indicators
     problem_indicators = (
         "find", "evaluate", "calculate", "compute", "solve", "prove",
@@ -201,75 +211,129 @@ def _build_queries(topic: str) -> list[str]:
 
 def _extract_questions_from_text(content: str, source_url: str) -> list[dict]:
     """
-    Heuristic extraction of question-like sentences from raw text content.
-    Splits on both newlines and sentence boundaries for richer extraction.
+    Extract complete, self-contained question texts from raw web content.
+
+    Strategy:
+    - Split into paragraphs (blank-line separated blocks)
+    - Within each block, identify question lines
+    - Prepend up to 3 preceding context lines so sub-questions get their setup
+    - Strip markdown artifacts (**, *** bold markers, :**, answer blanks)
+    - Reject obvious fragments / navigation / junk
     """
     import re
 
-    questions = []
+    def _clean(text: str) -> str:
+        """Strip markdown/HTML artifacts from scraped text."""
+        # Remove bold markers (**text** or ***text***)
+        text = re.sub(r'\*{2,3}(.*?)\*{2,3}', r'\1', text)
+        # Remove leftover asterisks / answer blanks like :** or :__
+        text = re.sub(r':\*+\.?$', '.', text.rstrip())
+        text = re.sub(r':_{2,}\.?$', '.', text.rstrip())
+        # Collapse multiple spaces
+        text = re.sub(r'  +', ' ', text)
+        return text.strip()
 
-    # Split on lines first, then also on sentence boundaries within long lines
-    raw_lines = content.split("\n")
-    candidates: list[str] = []
-    for line in raw_lines:
-        line = line.strip()
-        if not line:
-            continue
-        if len(line) > 200:
-            parts = re.split(r'(?<=[.?])\s+', line)
-            candidates.extend([p.strip() for p in parts if p.strip()])
-        else:
-            candidates.append(line)
-
-    math_indicators = [
+    MATH_INDICATORS = [
         "∫", "∑", "∏", "√", "→", "≤", "≥", "≠", "∞",
         "$", "^2", "^3", "lim(", "lim_", "dx", "dy", "dz",
         "sin(", "cos(", "tan(", "cot(", "sec(", "log(", "ln(", "f(x)",
         "matrix", "determinant", "vector",
-        "eccentricity", "foci", "focus", "ellipse", "parabola", "hyperbola",
-        "chord", "tangent", "asymptote", "directrix",
-        "integral", "derivative", "differentia", "integra",
-        "polynomial", "quadratic", "roots", "coefficient",
-        "complex number", "modulus", "argument",
-        "probability", "binomial", "permutation", "combination",
-        "progression", "sequence", "series",
+        "eccentricity", "ellipse", "parabola", "hyperbola",
+        "chord", "tangent", "integral", "derivative", "differentia",
+        "polynomial", "quadratic", "roots",
+        "complex number", "modulus", "probability", "binomial",
+        "permutation", "combination", "progression", "sequence",
     ]
 
-    question_starters = (
-        "find", "evaluate", "calculate", "compute", "prove", "show", "determine",
-        "if ", "let ", "for ", "given", "solve", "integrate", "differentiate",
-        "a ", "an ", "the ", "two ", "three ", "suppose", "consider", "from ",
-        "which", "what", "how", "when", "using", "without", "in a ", "p(",
+    QUESTION_STARTERS = (
+        "find ", "evaluate ", "calculate ", "compute ", "prove ", "show ",
+        "determine ", "solve ", "integrate ", "differentiate ",
+        "if ", "let ", "given ", "suppose ", "consider ",
+        "for what", "how many", "how much", "which of",
+        "what is", "what are", "in a ", "p(", "from a ",
     )
 
-    junk_phrases = (
-        "the document contains", "this document", "pdf includes", "pdf contains",
-        "detailing various", "includes different types", "collection of",
-        "set of questions", "click here", "download", "subscribe",
-        "all rights reserved", "the following questions",
+    # Lines that look like setup/context (contain numbers + container words)
+    CONTEXT_KEYWORDS = (
+        "contains", "consist", "bag", "box", "urn", "jar", "group",
+        "set of", "collection", "total", "digits", "letters",
+        "numbers from", "integers", "balls", "cards", "coins",
+        "students", "persons", "committee",
     )
 
+    JUNK_PHRASES = (
+        "click here", "download", "subscribe", "all rights reserved",
+        "the document contains", "this document", "pdf includes",
+        "pdf contains", "detailing various", "click to", "see also",
+        "previous year", "next question", "answer key", "solution:",
+        "copyright", "privacy policy", "terms of use",
+    )
+
+    questions: list[dict] = []
     seen: set[str] = set()
-    for cand in candidates:
-        cand = cand.strip()
-        if len(cand) < 20 or len(cand) > 600:
+
+    # Split into paragraphs (2+ newlines = paragraph break)
+    paragraphs = re.split(r'\n{2,}', content)
+
+    for para in paragraphs:
+        # Split paragraph into individual lines
+        lines = [l.strip() for l in para.split('\n') if l.strip()]
+        if not lines:
             continue
-        lower = cand.lower()
-        if any(p in lower for p in junk_phrases):
-            continue
-        key = lower[:60]
-        if key in seen:
-            continue
-        if cand.endswith("?"):
+
+        for i, line in enumerate(lines):
+            lower = line.lower()
+
+            # Skip obvious junk
+            if any(j in lower for j in JUNK_PHRASES):
+                continue
+            if len(line) < 25 or len(line) > 700:
+                continue
+
+            is_question = (
+                line.endswith("?")
+                or any(lower.startswith(s) for s in QUESTION_STARTERS)
+                or re.match(r'^\*{0,2}(q(?:uestion)?\s*\d+[.:\)]|\d+[.)]\s)', lower)
+                or any(ind in line for ind in MATH_INDICATORS)
+            )
+            if not is_question:
+                continue
+
+            # Gather context: look back up to 3 lines in the same paragraph
+            # for setup sentences (containing numbers, container words, etc.)
+            context_lines = []
+            for j in range(max(0, i - 3), i):
+                prev = lines[j].strip()
+                prev_lower = prev.lower()
+                # Include if it looks like problem setup (not a heading or nav)
+                if (
+                    len(prev) > 15
+                    and not any(j2 in prev_lower for j2 in JUNK_PHRASES)
+                    and (
+                        any(c in prev_lower for c in CONTEXT_KEYWORDS)
+                        or re.search(r'\d', prev)   # contains a number
+                        or prev.endswith(",")        # continuation
+                    )
+                ):
+                    context_lines.append(prev)
+
+            # Build full question text
+            full_text = " ".join(context_lines + [line]).strip() if context_lines else line
+
+            # Clean markdown artifacts
+            full_text = _clean(full_text)
+
+            # Skip if still too short after combining
+            if len(full_text) < 30:
+                continue
+
+            # Dedup by first 80 chars
+            key = full_text.lower()[:80]
+            if key in seen:
+                continue
             seen.add(key)
-            questions.append({"text": cand, "source_url": source_url})
-            continue
-        if any(lower.startswith(s) for s in question_starters):
-            seen.add(key)
-            questions.append({"text": cand, "source_url": source_url})
-            continue
-        if any(ind in cand for ind in math_indicators):
-            seen.add(key)
-            questions.append({"text": cand, "source_url": source_url})
+
+            questions.append({"text": full_text, "source_url": source_url})
 
     return questions
+
