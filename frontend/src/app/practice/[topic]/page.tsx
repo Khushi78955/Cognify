@@ -131,10 +131,10 @@ export default function PracticePage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center space-y-3">
-          <div className="w-10 h-10 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto" />
-          <p className="text-gray-300 text-sm font-medium">Fetching questions for {topicLabel}…</p>
-          <p className="text-gray-500 text-xs">First visit may take a few seconds</p>
+        <div className="text-center space-y-4">
+          <div className="spin-ring mx-auto" />
+          <p className="text-sm font-medium" style={{ color: "var(--text2)" }}>Fetching questions for {topicLabel}…</p>
+          <p className="text-xs" style={{ color: "var(--text3)" }}>First visit may take a few seconds</p>
         </div>
       </div>
     );
@@ -144,25 +144,36 @@ export default function PracticePage() {
   if (ingesting && questions.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="card max-w-md text-center space-y-5">
+        <div className="card max-w-md w-full text-center space-y-5" style={{ padding: "40px" }}>
           <div className="text-5xl">🔍</div>
-          <h2 className="text-xl font-bold text-white">Sourcing Questions…</h2>
-          <p className="text-gray-400 text-sm leading-relaxed">
-            We&apos;re hunting for the best <span className="text-brand-400 font-medium">{topicLabel}</span> problems
-            from the web just for you.
+          <h2
+            className="text-xl font-bold"
+            style={{
+              fontFamily: "'Google Sans Display', sans-serif",
+              background: "linear-gradient(135deg, var(--accent2), var(--neon3))",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            }}
+          >
+            Sourcing Questions…
+          </h2>
+          <p className="text-sm leading-relaxed" style={{ color: "var(--text2)" }}>
+            We&apos;re hunting for the best{" "}
+            <span className="font-semibold" style={{ color: "var(--accent2)" }}>{topicLabel}</span>{" "}
+            problems from the web just for you.
           </p>
-          <p className="text-gray-500 text-xs">This takes about 15–20 seconds. Hang tight!</p>
+          <p className="text-xs" style={{ color: "var(--text3)" }}>This takes about 15–20 seconds. Hang tight!</p>
           <div className="flex justify-center gap-2 pt-1">
             {[0, 1, 2].map((i) => (
               <div
                 key={i}
-                className="w-2 h-2 rounded-full bg-brand-500 animate-bounce"
+                className="bounce-dot"
                 style={{ animationDelay: `${i * 0.15}s` }}
               />
             ))}
           </div>
-          <p className="text-gray-600 text-xs">Auto-refreshing every 3s…</p>
-          <Link href="/dashboard" className="btn-ghost text-sm">
+          <p className="text-xs" style={{ color: "var(--text3)" }}>Auto-refreshing every 3s…</p>
+          <Link href="/dashboard" className="btn-ghost text-sm inline-flex">
             ← Back to dashboard
           </Link>
         </div>
@@ -175,7 +186,7 @@ export default function PracticePage() {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="card max-w-md text-center space-y-4">
-          <p className="text-red-400">{error}</p>
+          <p className="text-sm" style={{ color: "var(--neon2)" }}>{error}</p>
           <Link href="/dashboard" className="btn-ghost">← Back to dashboard</Link>
         </div>
       </div>
@@ -186,17 +197,29 @@ export default function PracticePage() {
   if (exhausted && !done) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
-        <div className="card max-w-md text-center space-y-5">
+        <div className="card max-w-md w-full text-center space-y-5" style={{ padding: "40px" }}>
           <div className="text-6xl">🏆</div>
-          <h2 className="text-2xl font-bold text-white">You&apos;re a Legend!</h2>
-          <p className="text-brand-400 font-medium">{topicLabel}</p>
-          <p className="text-gray-400 text-sm leading-relaxed">
+          <h2
+            className="text-2xl font-bold"
+            style={{ fontFamily: "'Google Sans Display', sans-serif", color: "var(--text)" }}
+          >
+            You&apos;re a Legend!
+          </h2>
+          <p className="font-semibold" style={{ color: "var(--accent2)" }}>{topicLabel}</p>
+          <p className="text-sm leading-relaxed" style={{ color: "var(--text2)" }}>
             You&apos;ve conquered every available question for this topic.
             Our AI is continuously sourcing harder problems — check back soon!
           </p>
-          <div className="bg-gray-800/60 rounded-xl p-4 text-sm text-gray-300 space-y-1">
-            <p>✅ <span className="text-white font-medium">{results.length}</span> questions answered this session</p>
-            <p>🎯 <span className="text-white font-medium">{results.filter(r => r.is_correct).length}</span> correct</p>
+          <div
+            className="rounded-xl p-4 text-sm space-y-1 text-left"
+            style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}
+          >
+            <p style={{ color: "var(--text2)" }}>
+              ✅ <span className="font-semibold" style={{ color: "var(--text)" }}>{results.length}</span> questions answered
+            </p>
+            <p style={{ color: "var(--text2)" }}>
+              🎯 <span className="font-semibold" style={{ color: "var(--text)" }}>{results.filter(r => r.is_correct).length}</span> correct
+            </p>
           </div>
           <div className="flex gap-3">
             <Link href="/dashboard" className="btn-primary flex-1 text-center">
@@ -223,26 +246,43 @@ export default function PracticePage() {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-md space-y-4">
-          <div className="card text-center space-y-4">
+          <div className="card text-center space-y-4" style={{ padding: "36px" }}>
             <div className="text-4xl">{emoji}</div>
-            <h2 className="text-2xl font-bold">
+            <h2
+              className="text-2xl font-bold"
+              style={{ fontFamily: "'Google Sans Display', sans-serif", color: "var(--text)" }}
+            >
               {exhausted ? "Topic Mastered!" : "Session Complete"}
             </h2>
-            <p className="text-gray-400 text-sm">{topicLabel}</p>
+            <p className="text-sm" style={{ color: "var(--text3)" }}>{topicLabel}</p>
             {exhausted && (
-              <p className="text-brand-400 text-sm">You&apos;ve seen every question for this topic 🎖️</p>
+              <p className="text-sm" style={{ color: "var(--accent2)" }}>You&apos;ve seen every question for this topic 🎖️</p>
             )}
 
-            <div className="grid grid-cols-3 gap-3 mt-4">
+            <div
+              className="grid grid-cols-3 gap-3 mt-2"
+              style={{
+                background: "var(--surface2)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--r)",
+                padding: "16px",
+              }}
+            >
               <StatBox label="Score" value={`${correct}/${results.length}`} />
               <StatBox label="Avg CMS" value={`${(avgCms * 100).toFixed(0)}%`} />
-              <StatBox label="Skill" value={Math.round(lastSkill).toString()} />
+              <StatBox label="ELO" value={Math.round(lastSkill).toString()} />
             </div>
 
             {results.some((r) => r.remediation) && (
-              <div className="bg-amber-900/30 border border-amber-700/50 rounded-xl p-4 text-left mt-2">
-                <p className="text-amber-300 text-xs font-semibold mb-2">📖 Remediation tip</p>
-                <p className="text-amber-100 text-sm leading-relaxed">
+              <div
+                className="rounded-xl p-4 text-left mt-2"
+                style={{
+                  background: "rgba(251,191,36,0.06)",
+                  border: "1px solid rgba(251,191,36,0.2)",
+                }}
+              >
+                <p className="text-xs font-semibold mb-2" style={{ color: "var(--gold)" }}>📖 Remediation tip</p>
+                <p className="text-sm leading-relaxed" style={{ color: "var(--text2)" }}>
                   {results.find((r) => r.remediation)!.remediation!.lesson}
                 </p>
               </div>
@@ -276,18 +316,34 @@ export default function PracticePage() {
     <div className="min-h-screen p-4 flex flex-col">
       {/* Nav */}
       <div className="flex items-center justify-between mb-4 max-w-2xl mx-auto w-full">
-        <Link href="/dashboard" className="text-gray-500 hover:text-gray-300 text-sm">
+        <Link
+          href="/dashboard"
+          className="text-sm font-medium transition-colors"
+          style={{ color: "var(--text3)" }}
+          onMouseOver={(e) => (e.currentTarget.style.color = "var(--text2)")}
+          onMouseOut={(e) => (e.currentTarget.style.color = "var(--text3)")}
+        >
           ← Dashboard
         </Link>
-        <span className="text-gray-400 text-sm font-medium">{topicLabel}</span>
+        <span className="text-sm font-semibold" style={{ color: "var(--text2)" }}>{topicLabel}</span>
         <div className="flex items-center gap-3">
           {results.length > 0 && (
-            <button onClick={() => setDone(true)} className="text-gray-500 hover:text-gray-300 text-sm">
+            <button
+              onClick={() => setDone(true)}
+              className="text-xs transition-colors"
+              style={{ color: "var(--text3)" }}
+              onMouseOver={(e) => (e.currentTarget.style.color = "var(--text2)")}
+              onMouseOut={(e) => (e.currentTarget.style.color = "var(--text3)")}
+            >
               Finish
             </button>
           )}
           {userId && (
-            <Link href="/doubt" className="text-brand-400 hover:text-brand-300 text-sm">
+            <Link
+              href="/doubt"
+              className="text-xs font-semibold transition-colors"
+              style={{ color: "var(--accent2)" }}
+            >
               Ask doubt
             </Link>
           )}
@@ -296,13 +352,20 @@ export default function PracticePage() {
 
       {/* Progress bar */}
       <div className="max-w-2xl mx-auto w-full mb-5">
-        <div className="h-1.5 bg-gray-800 rounded-full overflow-hidden">
+        <div
+          className="h-1.5 rounded-full overflow-hidden"
+          style={{ background: "var(--surface2)", border: "1px solid var(--border2)" }}
+        >
           <div
-            className="h-full bg-brand-500 rounded-full transition-all duration-500"
-            style={{ width: results.length > 0 ? `${Math.min((results.length % 10) * 10, 100)}%` : "0%" }}
+            className="h-full rounded-full transition-all duration-500"
+            style={{
+              width: results.length > 0 ? `${Math.min((results.length % 10) * 10, 100)}%` : "0%",
+              background: "linear-gradient(90deg, var(--neon), var(--accent2))",
+              boxShadow: "0 0 8px var(--glow)",
+            }}
           />
         </div>
-        <div className="flex justify-between text-xs text-gray-600 mt-1">
+        <div className="flex justify-between text-xs mt-1" style={{ color: "var(--text3)" }}>
           <span>{results.length} answered</span>
           <span>{results.filter((r) => r.is_correct).length} correct</span>
         </div>
@@ -312,8 +375,8 @@ export default function PracticePage() {
       {fetchingMore ? (
         <div className="max-w-2xl mx-auto w-full flex-1 flex items-center justify-center">
           <div className="text-center space-y-3">
-            <div className="w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto" />
-            <p className="text-gray-400 text-sm">Loading next question…</p>
+            <div className="spin-ring mx-auto" />
+            <p className="text-sm" style={{ color: "var(--text3)" }}>Loading next question…</p>
           </div>
         </div>
       ) : (
@@ -336,9 +399,14 @@ export default function PracticePage() {
 
 function StatBox({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-gray-800 rounded-xl p-3 text-center">
-      <div className="text-xl font-bold text-brand-400">{value}</div>
-      <div className="text-xs text-gray-500 mt-0.5">{label}</div>
+    <div className="text-center">
+      <div
+        className="text-xl font-bold"
+        style={{ color: "var(--accent2)", fontFamily: "'Google Sans Display', sans-serif" }}
+      >
+        {value}
+      </div>
+      <div className="text-xs mt-0.5" style={{ color: "var(--text3)" }}>{label}</div>
     </div>
   );
 }

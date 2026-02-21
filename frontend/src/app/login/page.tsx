@@ -28,26 +28,51 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
+    <div className="min-h-screen flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
         {/* Logo */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-extrabold text-brand-500 tracking-tight">Cognify</h1>
-          <p className="mt-2 text-gray-400 text-sm">Adaptive AI for JEE Mathematics</p>
+        <div className="text-center mb-10">
+          <h1
+            className="text-5xl font-bold tracking-tight mb-1"
+            style={{
+              fontFamily: "'Google Sans Display', sans-serif",
+              background: "linear-gradient(135deg, var(--accent2), var(--neon3))",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            }}
+          >
+            Cognify
+          </h1>
+          <p className="text-sm" style={{ color: "var(--text2)" }}>
+            Adaptive JEE Mathematics
+          </p>
         </div>
 
-        <div className="card">
-          <h2 className="text-xl font-bold mb-6">Sign in</h2>
+        <div className="card" style={{ padding: "36px" }}>
+          <h2 className="text-xl font-bold mb-1" style={{ color: "var(--text)" }}>Sign in</h2>
+          <p className="text-sm mb-6" style={{ color: "var(--text2)" }}>Welcome back. Continue your practice.</p>
 
           {error && (
-            <div className="mb-4 px-4 py-3 rounded-lg bg-red-900/40 border border-red-700 text-red-300 text-sm">
+            <div
+              className="mb-5 px-4 py-3 rounded-xl text-sm"
+              style={{
+                background: "rgba(255,101,132,0.08)",
+                border: "1px solid rgba(255,101,132,0.25)",
+                color: "var(--neon2)",
+              }}
+            >
               {error}
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">Email</label>
+              <label
+                className="block text-xs font-semibold mb-2 uppercase tracking-wider"
+                style={{ color: "var(--text2)" }}
+              >
+                Email
+              </label>
               <input
                 className="input"
                 type="email"
@@ -58,7 +83,12 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">Password</label>
+              <label
+                className="block text-xs font-semibold mb-2 uppercase tracking-wider"
+                style={{ color: "var(--text2)" }}
+              >
+                Password
+              </label>
               <input
                 className="input"
                 type="password"
@@ -69,16 +99,47 @@ export default function LoginPage() {
               />
             </div>
             <button type="submit" className="btn-primary w-full mt-2" disabled={loading}>
-              {loading ? "Signing in…" : "Sign in"}
+              {loading ? (
+                <>
+                  <div
+                    className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin"
+                  />
+                  Signing in…
+                </>
+              ) : (
+                "Sign in →"
+              )}
             </button>
           </form>
 
-          <p className="mt-5 text-center text-sm text-gray-500">
+          <div
+            className="flex items-center gap-3 my-5"
+            style={{ color: "var(--text3)", fontSize: "12px" }}
+          >
+            <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+            or
+            <div className="flex-1 h-px" style={{ background: "var(--border)" }} />
+          </div>
+
+          <p className="text-center text-sm" style={{ color: "var(--text2)" }}>
             No account?{" "}
-            <Link href="/register" className="text-brand-400 hover:underline font-medium">
+            <Link
+              href="/register"
+              className="font-semibold"
+              style={{ color: "var(--accent2)" }}
+            >
               Create one
             </Link>
           </p>
+        </div>
+
+        {/* Trust badges */}
+        <div className="flex justify-center gap-6 mt-6">
+          {["Free forever", "No credit card", "Instant access"].map((t) => (
+            <span key={t} className="text-xs" style={{ color: "var(--text3)" }}>
+              ✓ {t}
+            </span>
+          ))}
         </div>
       </div>
     </div>

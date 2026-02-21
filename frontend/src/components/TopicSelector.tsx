@@ -13,15 +13,17 @@ const CATEGORY_ICONS: Record<string, string> = {
   "Vectors & 3D": "→",
 };
 
-const CATEGORY_COLORS: Record<string, string> = {
-  "Sets & Functions": "from-violet-900/50 to-violet-800/20 border-violet-700/50",
-  "Algebra": "from-blue-900/50 to-blue-800/20 border-blue-700/50",
-  "Matrices": "from-cyan-900/50 to-cyan-800/20 border-cyan-700/50",
-  "Trigonometry": "from-emerald-900/50 to-emerald-800/20 border-emerald-700/50",
-  "Coordinate Geometry": "from-yellow-900/50 to-yellow-800/20 border-yellow-700/50",
-  "Calculus": "from-rose-900/50 to-rose-800/20 border-rose-700/50",
-  "Vectors & 3D": "from-orange-900/50 to-orange-800/20 border-orange-700/50",
+const CATEGORY_ACCENT: Record<string, { bg: string; border: string; color: string }> = {
+  "Sets & Functions": { bg: "rgba(139,92,246,0.1)", border: "rgba(139,92,246,0.25)", color: "#a78bfa" },
+  "Algebra":          { bg: "rgba(99,102,241,0.1)", border: "rgba(99,102,241,0.25)", color: "#818cf8" },
+  "Matrices":         { bg: "rgba(6,182,212,0.1)",  border: "rgba(6,182,212,0.25)",  color: "#22d3ee" },
+  "Trigonometry":     { bg: "rgba(16,185,129,0.1)", border: "rgba(16,185,129,0.25)", color: "#34d399" },
+  "Coordinate Geometry": { bg: "rgba(251,191,36,0.1)", border: "rgba(251,191,36,0.2)", color: "#fbbf24" },
+  "Calculus":         { bg: "rgba(168,85,247,0.1)", border: "rgba(168,85,247,0.25)", color: "#c084fc" },
+  "Vectors & 3D":     { bg: "rgba(67,232,216,0.1)", border: "rgba(67,232,216,0.2)",  color: "#43e8d8" },
 };
+
+const DEFAULT_ACCENT = { bg: "rgba(124,111,255,0.1)", border: "rgba(124,111,255,0.2)", color: "var(--accent2)" };
 
 export default function TopicSelector() {
   const router = useRouter();
@@ -33,37 +35,92 @@ export default function TopicSelector() {
 
   return (
     <div>
-      <h2 className="text-lg font-semibold mb-4 text-gray-200">Choose a Topic</h2>
+      <p className="text-xs mb-4" style={{ color: "var(--text3)" }}>
+        Select a category then pick a topic to start adaptive practice
+      </p>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+      <div
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px overflow-hidden rounded-xl"
+        style={{ background: "var(--border2)", border: "1px solid var(--border2)" }}
+      >
         {CATEGORIES.map((cat) => {
           const topics = topicsByCategory(cat);
           const isActive = activeCategory === cat;
+          const accent = CATEGORY_ACCENT[cat] ?? DEFAULT_ACCENT;
+
           return (
-            <div key={cat} className="col-span-1">
+            <div
+              key={cat}
+              className="overflow-hidden"
+              style={{ background: "var(--surface)" }}
+            >
               {/* Category header */}
               <button
                 onClick={() => setActiveCategory(isActive ? null : cat)}
-                className={`w-full text-left p-4 rounded-xl border bg-gradient-to-br transition-all hover:scale-[1.02] active:scale-[0.98] ${
-                  CATEGORY_COLORS[cat] ?? "from-gray-800/50 to-gray-700/20 border-gray-700/50"
-                } ${isActive ? "ring-2 ring-brand-500" : ""}`}
+                className="w-full text-left p-4 transition-all duration-200 relative overflow-hidden"
+                style={{
+                  background: isActive ? accent.bg : "transparent",
+                }}
+                onMouseOver={(e) => { if (!isActive) e.currentTarget.style.background = `${accent.bg}80`; }}
+                onMouseOut={(e) => { if (!isActive) e.currentTarget.style.background = "transparent"; }}
               >
-                <div className="text-2xl mb-1">{CATEGORY_ICONS[cat] ?? "📚"}</div>
-                <div className="font-semibold text-sm text-gray-100">{cat}</div>
-                <div className="text-xs text-gray-400 mt-0.5">{topics.length} topics</div>
+                {/* Top accent bar on active */}
+                {isActive && (
+                  <div
+                    className="absolute top-0 left-0 right-0 h-0.5"
+                    style={{ background: `linear-gradient(90deg, ${accent.color}, transparent)` }}
+                  />
+                )}
+                <div
+                  className="inline-flex items-center justify-center w-10 h-10 rounded-xl text-xl mb-3"
+                  style={{
+                    background: accent.bg,
+                    border: `1px solid ${accent.border}`,
+                    color: accent.color,
+                  }}
+                >
+                  {CATEGORY_ICONS[cat] ?? "📚"}
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-semibold text-sm" style={{ color: "var(--text)" }}>{cat}</div>
+                    <div className="text-xs mt-0.5" style={{ color: "var(--text3)" }}>{topics.length} topics</div>
+                  </div>
+                  <span
+                    className="text-xs transition-transform duration-200"
+                    style={{
+                      color: accent.color,
+                      transform: isActive ? "rotate(90deg)" : "rotate(0deg)",
+                    }}
+                  >
+                    →
+                  </span>
+                </div>
               </button>
 
-              {/* Topic list (expands below the card) */}
+              {/* Topic list */}
               {isActive && (
-                <div className="mt-2 space-y-1 col-span-full">
+                <div
+                  className="border-t"
+                  style={{ borderColor: accent.border }}
+                >
                   {topics.map((t) => (
                     <button
                       key={t.id}
                       onClick={() => selectTopic(t.id)}
-                      className="w-full text-left px-4 py-2.5 rounded-lg bg-gray-800 hover:bg-gray-700 hover:text-brand-300 text-gray-300 text-sm transition-colors flex items-center justify-between group"
+                      className="w-full text-left px-4 py-2.5 text-sm flex items-center justify-between transition-all duration-150 group"
+                      style={{ color: "var(--text2)", borderBottom: "1px solid var(--border2)" }}
+                      onMouseOver={(e) => {
+                        e.currentTarget.style.background = accent.bg;
+                        e.currentTarget.style.color = accent.color;
+                      }}
+                      onMouseOut={(e) => {
+                        e.currentTarget.style.background = "transparent";
+                        e.currentTarget.style.color = "var(--text2)";
+                      }}
                     >
                       <span>{t.label}</span>
-                      <span className="text-gray-600 group-hover:text-brand-400 text-xs">→</span>
+                      <span className="text-xs" style={{ color: "var(--text3)" }}>→</span>
                     </button>
                   ))}
                 </div>

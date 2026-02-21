@@ -83,20 +83,24 @@ export default function DoubtChat({ userId }: Props) {
   return (
     <div className="space-y-5">
       {/* Input form */}
-      <form onSubmit={handleSubmit} className="space-y-3">
+      <form onSubmit={handleSubmit} className="space-y-4">
 
         {/* Image upload area */}
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="text-xs font-medium text-gray-400">
-              Question image <span className="text-gray-600">(optional — paste or upload)</span>
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text3)" }}>
+              Question image{" "}
+              <span className="normal-case font-normal" style={{ color: "rgba(255,255,255,0.2)" }}>
+                (optional — paste or upload)
+              </span>
             </label>
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="text-xs text-brand-400 hover:text-brand-300 transition-colors"
+              className="text-xs font-semibold transition-colors"
+              style={{ color: "var(--accent2)" }}
             >
-              + Upload image
+              + Upload
             </button>
           </div>
           <input
@@ -110,7 +114,10 @@ export default function DoubtChat({ userId }: Props) {
             }}
           />
           {imagePreview ? (
-            <div className="relative rounded-xl overflow-hidden border border-gray-700/60 bg-gray-900">
+            <div
+              className="relative rounded-xl overflow-hidden"
+              style={{ border: "1px solid var(--border)", background: "var(--surface2)" }}
+            >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={imagePreview}
@@ -120,7 +127,12 @@ export default function DoubtChat({ userId }: Props) {
               <button
                 type="button"
                 onClick={clearImage}
-                className="absolute top-2 right-2 w-6 h-6 rounded-full bg-gray-900/80 border border-gray-700 text-gray-400 hover:text-white flex items-center justify-center text-xs leading-none"
+                className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors"
+                style={{
+                  background: "var(--surface)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text3)",
+                }}
                 title="Remove image"
               >
                 ✕
@@ -130,18 +142,25 @@ export default function DoubtChat({ userId }: Props) {
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="w-full h-24 rounded-xl border border-dashed border-gray-700 hover:border-brand-600 bg-gray-900/40 text-gray-500 hover:text-gray-400 text-sm transition-colors flex flex-col items-center justify-center gap-1"
+              className="w-full h-24 rounded-xl text-sm transition-all flex flex-col items-center justify-center gap-1.5"
+              style={{
+                border: "1px dashed var(--border)",
+                background: "rgba(255,255,255,0.015)",
+                color: "var(--text3)",
+              }}
+              onMouseOver={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--accent)"; }}
+              onMouseOut={(e) => { (e.currentTarget as HTMLElement).style.borderColor = "var(--border)"; }}
             >
-              <span className="text-2xl">📷</span>
-              <span>Click to upload or paste a screenshot (Ctrl+V / ⌘V)</span>
+              <span className="text-xl">📷</span>
+              <span>Click to upload or paste (Ctrl+V / ⌘V)</span>
             </button>
           )}
         </div>
 
         {/* Text question */}
-        <div>
-          <label className="block text-xs font-medium text-gray-400 mb-1.5">
-            {imageBase64 ? "Add context (optional)" : "Or type your question"}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text3)" }}>
+            {imageBase64 ? "Add context (optional)" : "Type your question"}
           </label>
           <textarea
             className="input resize-none h-24"
@@ -155,16 +174,12 @@ export default function DoubtChat({ userId }: Props) {
           />
         </div>
 
-        <button
-          type="submit"
-          className="btn-primary w-full"
-          disabled={!canSubmit}
-        >
+        <button type="submit" className="btn-primary w-full" disabled={!canSubmit}>
           {loading ? (
-            <span className="flex items-center justify-center gap-2">
-              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            <>
+              <div className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: "rgba(255,255,255,0.3)", borderTopColor: "white" }} />
               {imageBase64 ? "Reading image & solving…" : "Solving…"}
-            </span>
+            </>
           ) : (
             "Solve with AI ✦"
           )}
@@ -172,7 +187,14 @@ export default function DoubtChat({ userId }: Props) {
       </form>
 
       {error && (
-        <div className="px-4 py-3 rounded-lg bg-red-900/40 border border-red-700 text-red-300 text-sm">
+        <div
+          className="px-4 py-3 rounded-xl text-sm"
+          style={{
+            background: "rgba(255,101,132,0.08)",
+            border: "1px solid rgba(255,101,132,0.25)",
+            color: "var(--neon2)",
+          }}
+        >
           {error}
         </div>
       )}
@@ -180,37 +202,73 @@ export default function DoubtChat({ userId }: Props) {
       {/* Result */}
       {result && (
         <div className="space-y-4">
-          {/* Steps */}
-          <div className="card space-y-3">
+          <div className="card space-y-4">
+            {/* Header */}
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-gray-200">Step-by-step solution</h3>
-              <div className="flex items-center gap-1.5">
+              <h3 className="font-semibold text-sm" style={{ color: "var(--text)" }}>
+                Step-by-step solution
+              </h3>
+              <div className="flex items-center gap-2">
                 {result.model_used === "aryabhata-1.0" ? (
-                  <span className="badge bg-orange-900/60 text-orange-300 border border-orange-700/50 text-xs">
+                  <span
+                    className="px-2 py-0.5 rounded-full text-xs font-bold"
+                    style={{
+                      background: "rgba(251,146,60,0.1)",
+                      border: "1px solid rgba(251,146,60,0.25)",
+                      color: "#fb923c",
+                    }}
+                  >
                     ⚡ Aryabhata 1.0
                   </span>
                 ) : (
-                  <span className="badge bg-blue-900/60 text-blue-300 border border-blue-700/50 text-xs">
+                  <span
+                    className="px-2 py-0.5 rounded-full text-xs font-bold"
+                    style={{
+                      background: "rgba(124,111,255,0.1)",
+                      border: "1px solid rgba(124,111,255,0.2)",
+                      color: "var(--accent2)",
+                    }}
+                  >
                     ✦ Gemini
                   </span>
                 )}
                 {result.sympy_verified ? (
-                  <span className="badge bg-emerald-900/60 text-emerald-300 border border-emerald-700/50">
+                  <span
+                    className="px-2 py-0.5 rounded-full text-xs font-bold"
+                    style={{
+                      background: "rgba(67,232,216,0.08)",
+                      border: "1px solid rgba(67,232,216,0.2)",
+                      color: "var(--neon3)",
+                    }}
+                  >
                     ✓ Verified
                   </span>
                 ) : (
-                  <span className="badge bg-gray-800 text-gray-500">Unverified</span>
+                  <span
+                    className="px-2 py-0.5 rounded-full text-xs"
+                    style={{ background: "var(--surface2)", color: "var(--text3)" }}
+                  >
+                    Unverified
+                  </span>
                 )}
               </div>
             </div>
 
+            {/* Steps */}
             <ol className="space-y-3">
               {result.steps.map((step, i) => (
                 <li key={i} className="flex gap-3">
-                  <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-900/60 border border-brand-700/50 text-brand-400 text-xs font-bold flex items-center justify-center mt-0.5">
+                  <span
+                    className="flex-shrink-0 w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center mt-0.5"
+                    style={{
+                      background: "rgba(124,111,255,0.1)",
+                      border: "1px solid rgba(124,111,255,0.2)",
+                      color: "var(--accent2)",
+                    }}
+                  >
                     {i + 1}
                   </span>
-                  <p className="text-gray-300 text-sm leading-relaxed">
+                  <p className="text-sm leading-relaxed" style={{ color: "var(--text2)" }}>
                     <MathText text={step} />
                   </p>
                 </li>
@@ -218,17 +276,21 @@ export default function DoubtChat({ userId }: Props) {
             </ol>
 
             {/* Final answer */}
-            <div className="border-t border-gray-800 pt-3 mt-2">
-              <p className="text-xs text-gray-500 mb-1">Final Answer</p>
-              <p className="text-brand-300 font-semibold text-lg">
+            <div
+              className="pt-3 mt-1 space-y-1"
+              style={{ borderTop: "1px solid var(--border2)" }}
+            >
+              <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--text3)" }}>
+                Final Answer
+              </p>
+              <p className="font-semibold text-lg" style={{ color: "var(--neon3)" }}>
                 <MathText text={result.final_answer} />
               </p>
             </div>
           </div>
 
-          {/* Ask another */}
           <button
-            onClick={() => { setResult(null); setQuestion(""); }}
+            onClick={() => { setResult(null); setQuestion(""); clearImage(); }}
             className="btn-ghost w-full"
           >
             Ask another question

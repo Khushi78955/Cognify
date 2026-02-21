@@ -18,21 +18,56 @@ export default function DoubtPage() {
   if (!userId) return null;
 
   return (
-    <div className="min-h-screen p-4 max-w-2xl mx-auto">
+    <div className="min-h-screen p-4">
       {/* Nav */}
-      <div className="flex items-center justify-between mb-6">
-        <Link href="/dashboard" className="text-gray-500 hover:text-gray-300 text-sm">
-          ← Dashboard
-        </Link>
-        <h1 className="text-xl font-bold">Doubt Solver</h1>
-        <div className="w-20" />
+      <div className="max-w-2xl mx-auto mb-6">
+        <div className="nav-glass flex items-center justify-between px-5 py-3">
+          <Link
+            href="/dashboard"
+            className="text-sm font-medium transition-colors"
+            style={{ color: "var(--text2)" }}
+          >
+            ← Dashboard
+          </Link>
+          <div className="flex items-center gap-2">
+            <span
+              className="text-lg font-bold"
+              style={{
+                fontFamily: "'Google Sans Display', sans-serif",
+                background: "linear-gradient(135deg, var(--accent2), var(--neon3))",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              }}
+            >
+              ✶ Doubt Solver
+            </span>
+            <span className="badge-teal badge">Gemini + SymPy</span>
+          </div>
+          <div className="w-24" />
+        </div>
       </div>
 
-      <div className="card">
-        <p className="text-gray-500 text-sm mb-5">
-          Describe any JEE Maths problem and get a step-by-step AI solution.
-        </p>
-        <DoubtChat userId={userId} />
+      <div className="max-w-2xl mx-auto">
+        {/* Intro card */}
+        <div
+          className="rounded-xl px-5 py-4 mb-4 flex items-start gap-3"
+          style={{
+            background: "rgba(67,232,216,0.05)",
+            border: "1px solid rgba(67,232,216,0.15)",
+          }}
+        >
+          <span className="text-2xl">🧠</span>
+          <div>
+            <p className="font-semibold text-sm" style={{ color: "var(--neon3)" }}>AI-Powered Step-by-Step Solutions</p>
+            <p className="text-xs mt-0.5" style={{ color: "var(--text2)" }}>
+              Describe any JEE Maths problem. Gemini solves it step-by-step, SymPy verifies the answer.
+            </p>
+          </div>
+        </div>
+
+        <div className="card">
+          <DoubtChat userId={userId} />
+        </div>
       </div>
     </div>
   );
