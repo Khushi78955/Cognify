@@ -84,6 +84,8 @@ def _is_actual_question(text: str) -> bool:
         "find", "evaluate", "calculate", "compute", "solve", "prove",
         "determine", "integral", "differentiate", "limit", "value of",
         "show that", "if f(", "if g(", "let f", "let g",
+        "probability", "how many", "how much", "selected", "chosen",
+        "drawn", "tossed", "rolled", "picked", "at random",
     )
     return any(p in t_lower for p in problem_indicators)
 
