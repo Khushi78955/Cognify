@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 import hashlib
 import json
+import threading
 from concurrent.futures import ThreadPoolExecutor, Future
 
 from app import crud
@@ -23,7 +24,15 @@ from app.services.remediation import should_remediate, trigger_remediation
 from app.services.supermemory import get_learner_state, write_session_summary, format_learner_context
 
 # Shared thread pool for parallel IO-bound tasks in answer submission
-_EXECUTOR = ThreadPoolExecutor(max_workers=4)
+_EXECUTOR = ThreadPoolExecutor(max_workers=8)
+
+# Topics currently being ingested in the background — prevents duplicate parallel ingests
+_ingesting_topics: set[str] = set()
+_ingest_lock = threading.Lock()
+
+# In-memory cache for topic embeddings (these never change so safe to cache forever)
+_embedding_cache: dict[str, list[float]] = {}
+_embedding_cache_lock = threading.Lock()
 
 router = APIRouter()
 
@@ -152,8 +161,24 @@ def start_session(body: PracticeStartRequest, db: Session = Depends(get_db)):
             detail=f"Unknown topic '{body.topic}'. Valid topics: {all_concepts[:10]}..."
         )
 
-    # 1. Learner state (background — only needed for Gemini fallback)
+    # 1. Learner state + topic embedding — both fired in parallel
     learner_state_future: Future = _EXECUTOR.submit(get_learner_state, body.user_id)
+
+    # Fire embedding fetch in parallel (or use cache if already computed)
+    def _fetch_embedding(t: str) -> list[float] | None:
+        with _embedding_cache_lock:
+            cached = _embedding_cache.get(t)
+        if cached:
+            return cached
+        try:
+            emb = get_embedding(t.replace("_", " "))
+            with _embedding_cache_lock:
+                _embedding_cache[t] = emb
+            return emb
+        except Exception as e:
+            print(f"[Practice] Embedding error: {e}")
+            return None
+    embedding_future: Future = _EXECUTOR.submit(_fetch_embedding, body.topic)
 
     # 2. Skill + difficulty band
     concept_id = _ensure_concept(db, body.topic)
@@ -163,11 +188,11 @@ def start_session(body: PracticeStartRequest, db: Session = Depends(get_db)):
     # 3. Seen question IDs — exclude from this session
     seen_ids: set[int] = set(crud.get_seen_question_ids(db, body.user_id, body.topic))
 
-    # 4. Get topic embedding for Pinecone query
+    # 4. Resolve topic embedding (wait for parallel fetch, max 2s — if it takes longer,
+    #    Pinecone returns 0 and we fall through to background ingest anyway)
     try:
-        query_emb = get_embedding(body.topic.replace("_", " "))
-    except Exception as e:
-        print(f"[Practice] Embedding error: {e}")
+        query_emb: list[float] | None = embedding_future.result(timeout=2)
+    except Exception:
         query_emb = None
 
     def _pinecone_query(n: int) -> list[dict]:
@@ -233,25 +258,32 @@ def start_session(body: PracticeStartRequest, db: Session = Depends(get_db)):
     pinecone_hits = _pinecone_query(body.n)
     questions, result_ids = _cache_and_format(pinecone_hits, seen_ids)
 
-    # 6. If Pinecone insufficient → Tavily ingest → re-query Pinecone
+    # 6. If Pinecone insufficient → fire background ingest (non-blocking) + Gemini fallback
+    ingest_fired = False
+    already_ingesting = False
     if len(questions) < body.n:
-        print(f"[Practice] Pinecone returned {len(questions)}/{body.n} — running Tavily ingest for '{body.topic}'...")
-        try:
-            ingest_topic(body.topic, n=20)
-        except Exception as e:
-            print(f"[Practice] Tavily ingest error (non-fatal): {e}")
-        # Re-query Pinecone after ingest
-        new_hits = _pinecone_query(body.n)
-        extra_qs, result_ids = _cache_and_format(new_hits, result_ids)
-        # Add only new questions
-        existing_ids = {q["id"] for q in questions}
-        for q in extra_qs:
-            if q["id"] not in existing_ids and len(questions) < body.n:
-                questions.append(q)
+        print(f"[Practice] Pinecone returned {len(questions)}/{body.n} — scheduling background ingest for '{body.topic}'...")
+        with _ingest_lock:
+            already_ingesting = body.topic in _ingesting_topics
+            if not already_ingesting:
+                _ingesting_topics.add(body.topic)
 
-    # 7. Gemini generation — Pinecone + Tavily both insufficient
+        if not already_ingesting:
+            def _bg_ingest(t=body.topic):
+                try:
+                    ingest_topic(t, n=15)
+                except Exception as e:
+                    print(f"[Practice] background ingest error (non-fatal): {e}")
+                finally:
+                    with _ingest_lock:
+                        _ingesting_topics.discard(t)
+            _EXECUTOR.submit(_bg_ingest)
+            ingest_fired = True
+
+    # 7. Gemini generation — only if not waiting on background ingest
     learner_state: dict = {}
-    if len(questions) < body.n:
+    if len(questions) < body.n and not ingest_fired and not already_ingesting:
+        # Only wait for learner state when we need Gemini to generate questions
         try:
             learner_state = learner_state_future.result(timeout=4)
         except Exception:
@@ -288,16 +320,30 @@ def start_session(body: PracticeStartRequest, db: Session = Depends(get_db)):
                 })
                 result_ids.add(db_id)
     else:
-        try:
-            learner_state = learner_state_future.result(timeout=4)
-        except Exception:
-            pass
+        # Only wait for learner_state if we actually have questions to return
+        if questions:
+            try:
+                learner_state = learner_state_future.result(timeout=4)
+            except Exception:
+                pass
 
-    if not questions:
-        raise HTTPException(
-            status_code=404,
-            detail=f"No questions found for topic '{body.topic}'. Try another topic."
-        )
+    # Determine response status:
+    # - "loading": background ingest is running — frontend should poll every 3s
+    # - "exhausted": user has seen all available questions for this topic → celebration screen
+    # - "ready": questions are available now
+    with _ingest_lock:
+        ingesting_now = body.topic in _ingesting_topics
+
+    waiting_for_ingest = ingesting_now or ingest_fired
+    if questions:
+        # We have questions — always "ready" regardless of whether ingest is also running
+        status = "ready"
+    elif waiting_for_ingest:
+        # Zero questions but background ingest is running — tell frontend to poll
+        status = "loading"
+    else:
+        # Zero questions and nothing ingesting — user has seen everything
+        status = "exhausted"
 
     return {
         "user_id": body.user_id,
@@ -307,6 +353,8 @@ def start_session(body: PracticeStartRequest, db: Session = Depends(get_db)):
         "learner_state": learner_state,
         "questions": questions[:body.n],
         "questions_count": min(len(questions), body.n),
+        "status": status,
+        "ingesting": ingesting_now or ingest_fired,
     }
 
 

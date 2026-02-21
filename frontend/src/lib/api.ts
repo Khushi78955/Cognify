@@ -63,15 +63,18 @@ export interface Question {
 
 export interface PracticeStartResponse {
   questions: Question[];
+  questions_count: number;
   skill: number;
   concept: string;
+  status: "ready" | "loading" | "exhausted";
+  ingesting: boolean;
 }
 
 export function startPractice(user_id: number, topic: string, n = 5) {
   return request<PracticeStartResponse>("/practice/start", {
     method: "POST",
     body: JSON.stringify({ user_id, topic, n }),
-  }, 45000); // 45s — may trigger Gemini question generation for new topics
+  }, 15000); // 15s — backend now responds instantly; ingest runs in background
 }
 
 export interface RemediationData {
