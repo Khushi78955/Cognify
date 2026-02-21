@@ -38,19 +38,23 @@ def _is_actual_question(text: str) -> bool:
         "demonstrate that", "hence prove", "hence show", "hence verify",
         "using the above", "using the result",
         # Explanation / description
-        "explain", "describe", "discuss", "write", "state",
-        "define", "justify", "derive ", "deduce",
+        "explain", "describe", "discuss", "write ", "write:",
+        "state ", "state:", "define", "justify", "derive ", "deduce",
         "what do you understand", "what is meant by",
+        "what are the", "what is the significance", "what is the importance",
         "write a note", "write short", "briefly explain",
-        "give an example", "list the", "enumerate",
-        "comment on", "outline",
+        "give an example", "give examples", "list the", "enumerate",
+        "comment on", "outline", "draw ", "sketch ",
+        "using integration by parts, prove", "using the formula, show",
     )
     if any(t_lower.startswith(p) for p in subjective_starts):
         return False
-    # Mid-sentence subjective wording
+    # Anywhere in the question (not just start)
     subjective_contains = (
         "hence show that", "hence prove that", "hence verify that",
         "hence derive", "hence deduce",
+        "explain your answer", "justify your answer",
+        "give reasons", "write the solution",
     )
     if any(p in t_lower for p in subjective_contains):
         return False
@@ -67,8 +71,14 @@ def _is_actual_question(text: str) -> bool:
     if len(t) < 30:
         return False
 
-    # Hard pass: ends with "?" → likely interrogative
-    if t.endswith("?"):
+    # Hard pass: ends with "?" — but only if question is NOT subjective
+    # (e.g. "What is the value of...?" is fine; "Explain why...?" is not)
+    subjective_question_words = (
+        "explain", "describe", "discuss", "justify", "what do you",
+        "what is meant", "what are the reasons", "why is", "how does",
+        "give reasons", "write", "define", "state the",
+    )
+    if t.endswith("?") and not any(t_lower.startswith(w) for w in subjective_question_words):
         return True
 
     # Hard pass: starts with action verbs common in JEE problems
@@ -118,9 +128,9 @@ def _is_actual_question(text: str) -> bool:
 
     # Default: reject if it doesn't contain any math-problem indicators
     problem_indicators = (
-        "find", "evaluate", "calculate", "compute", "solve", "prove",
+        "find", "evaluate", "calculate", "compute", "solve",
         "determine", "integral", "differentiate", "limit", "value of",
-        "show that", "if f(", "if g(", "let f", "let g",
+        "if f(", "if g(", "let f", "let g",
         "probability", "how many", "how much", "selected", "chosen",
         "drawn", "tossed", "rolled", "picked", "at random",
     )
